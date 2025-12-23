@@ -1,0 +1,9 @@
+v 3
+d lsaplot: a stata command for plotting event study results
+d distribution-date: 2025-12-23
+d author: lisanan
+d support: lilinze626@gmail.com
+d url: https://github.com/hurilen/lsaplot
+
+f lsaplot.ado
+f lsaplot.sthlp
