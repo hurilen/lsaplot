@@ -1,77 +1,72 @@
-*! version 1.0.0  lsaplot: Event Study with Aesthetic & Robustness
+*! version 1.7.4  lsaplot: Full-Width (No Aspect), Compact Scale, Visible CI
 *! Author: Li San'an
-*! Date: 2025
+*! Date: 2026-2-13
 
 capture program drop lsaplot
 program define lsaplot
     version 14.0
     
     * ----------------------------------------------------
-    * Syntax Parsing
+    * Syntax
     * ----------------------------------------------------
     syntax varlist(min=1 numeric fv) [if] [in], ///
-        Treat(varname) ///      Treatment time variable (e.g. policy year)
+        Treat(varname) ///      Treatment variable
         ID(varname) ///         Panel ID
         Time(varname) ///       Panel Time
         [ ///
-        Start(string) ///       Plot window start (relative time)
-        End(string) ///         Plot window end (relative time)
-        Base(integer -1) ///    Reference period
-        LEvel(integer 95) ///   Confidence Interval Level
-        CLuster(varname) ///    Standard Error Clustering
-        Absorb(string) ///      High-Dimensional FE (invokes reghdfe)
-        NoGraph ///             Suppress plotting
-        KeepData ///            Keep plotting data in memory
-        Title(string) ///       Custom graph title
-        BIN                     ///  Mode: Bin endpoints (Accumulate)
-        TRIM                    ///  Mode: Trim endpoints (Drop)
+        Start(string) ///       Start
+        End(string) ///         End
+        Base(integer -1) ///    Base
+        LEvel(integer 95) ///   CI
+        CLuster(varname) ///    SE
+        Absorb(string) ///      FE
+        Title(string) ///       Title
+        Name(string) ///        Name
+        NoGraph ///             Suppress
+        KeepData ///            Data
+        BIN TRIM ///            Modes
         ]
 
     * ----------------------------------------------------
-    * 1. Conflict Check & Setup
+    * 1. Parsing Name
+    * ----------------------------------------------------
+    local n_opt ""
+    if "`name'" != "" {
+        tokenize "`name'", parse(",")
+        local clean_n "`1'"
+        local n_opt "name(`clean_n', replace)"
+    }
+
+    * ----------------------------------------------------
+    * 2. Checks & Logic
     * ----------------------------------------------------
     if "`bin'" != "" & "`trim'" != "" {
-        di as error "Error: Options 'bin' and 'trim' are mutually exclusive."
+        di as error "Error: 'bin' and 'trim' mutually exclusive."
         exit 198
     }
 
-    * Font Best Effort (Windows Only typically)
     capture graph set window fontface "Times New Roman"
     capture graph set window fontfacemono "Times New Roman"
     capture graph set window fontfacesans "Times New Roman"
 
-    * ----------------------------------------------------
-    * 2. Engine Strategy
-    * ----------------------------------------------------
-    * Default: XTREG (Classic TWFE)
     local engine "xtreg"
     local use_time_dummy "yes"
     local run_absorb ""
 
-    * A. Custom Absorb Mode
     if "`absorb'" != "" {
         local engine "reghdfe"
         local use_time_dummy "no"
         local run_absorb "`absorb'"
     }
-    
-    * B. Auto-switch Mode (if cluster breaks xtreg)
     else {
         if "`cluster'" != "" & "`cluster'" != "`id'" {
             local engine "reghdfe"
             local use_time_dummy "no"
             local run_absorb "`id' `time'"
-            di as txt "Note [lsaplot]: Non-nested cluster detected. Using 'reghdfe'."
-        }
-        else {
-            local engine "xtreg"
-            local use_time_dummy "yes"
+            di as txt "Note: Auto-switching to 'reghdfe'."
         }
     }
 
-    * ----------------------------------------------------
-    * 3. Dependencies
-    * ----------------------------------------------------
     set more off
     local depvar : word 1 of `varlist'
     local controls : subinstr local varlist "`depvar'" ""
@@ -79,26 +74,26 @@ program define lsaplot
     if "`engine'" == "reghdfe" {
         capture which reghdfe
         if _rc {
-            di as error "Error [lsaplot]: 'reghdfe' required (ssc install reghdfe)."
+            di as error "Error: 'reghdfe' required."
             exit 199
         }
     }
     if "`engine'" == "xtreg" {
         capture xtset
         if _rc {
-            di as error "Error [lsaplot]: Data not xtset. Run 'xtset `id' `time''."
+            di as error "Error: Data not xtset."
             exit 198
         }
     }
 
     * ----------------------------------------------------
-    * 4. Data Processing
+    * 3. Data Processing
     * ----------------------------------------------------
     marksample touse
     if "`cluster'" != "" {
         capture confirm variable `cluster'
         if _rc { 
-            di as error "Error: Cluster variable '`cluster'' not found."
+            di as error "Error: Cluster var not found." 
             exit 111 
         }
         quietly replace `touse' = 0 if missing(`cluster')
@@ -107,19 +102,17 @@ program define lsaplot
     preserve
     quietly keep if `touse'
     
-    * Generate Relative Time
     tempvar rel_t
     quietly gen `rel_t' = `time' - `treat'
     quietly replace `rel_t' = . if `treat' == 0 | `treat' == .
     
     quietly summarize `rel_t'
     if r(N) == 0 {
-        di as error "Error [lsaplot]: No treated observations found."
+        di as error "Error: No treated observations."
         restore
         exit 2000
     }
 
-    * Define Window
     local min_d = r(min)
     local max_d = r(max)
     local s_win = cond("`start'" == "", `min_d', real("`start'"))
@@ -131,30 +124,27 @@ program define lsaplot
          local e_win = `temp'
     }
 
-    * Bin / Trim Logic
     if "`trim'" != "" {
-        di as txt "Mode [lsaplot]: TRIMMING outside [`s_win', `e_win']"
+        di as txt "Mode: TRIMMING [`s_win', `e_win']"
         quietly drop if (`rel_t' < `s_win' | `rel_t' > `e_win') & `rel_t' != .
     }
     else if "`bin'" != "" {
-        di as txt "Mode [lsaplot]: BINNING endpoints to [`s_win', `e_win']"
+        di as txt "Mode: BINNING [`s_win', `e_win']"
         quietly replace `rel_t' = `s_win' if `rel_t' <= `s_win' & `rel_t' != .
         quietly replace `rel_t' = `e_win' if `rel_t' >= `e_win' & `rel_t' != .
     }
 
-    * Padding Calculation
-    local scale_min = `s_win' - 0.2
-    local scale_max = `e_win' + 0.2
+    * === Fix: Even tighter padding (0.1) ===
+    local scale_min = `s_win' - 0.1
+    local scale_max = `e_win' + 0.1
 
     capture drop _ls_ev_*
     local d_vars ""
     local v_count 0
-    
     forvalues k = `s_win'/`e_win' {
         if `k' != `base' {
             if `k' < 0  local name "m`=abs(`k')'"
             else        local name "p`k'"
-            
             quietly count if `rel_t' == `k'
             if r(N) > 0 {
                 quietly gen byte _ls_ev_`name' = (`rel_t' == `k')
@@ -163,7 +153,6 @@ program define lsaplot
             }
         }
     }
-    
     if `v_count' == 0 {
         di as error "Error: No dummies generated."
         restore
@@ -171,15 +160,12 @@ program define lsaplot
     }
 
     * ----------------------------------------------------
-    * 5. Regression Execution
+    * 4. Regression
     * ----------------------------------------------------
-    local vce_cmd "robust"
-    if "`cluster'" != "" {
-        local vce_cmd "cluster `cluster'"
-    }
+    local vce_cmd = cond("`cluster'"!="", "cluster `cluster'", "robust")
 
     if "`engine'" == "xtreg" {
-        di as txt "Running xtreg (TWFE)..."
+        di as txt "Running xtreg..."
         capture noisily xtreg `depvar' `d_vars' `controls' i.`time', fe vce(`vce_cmd')
     }
     else {
@@ -193,13 +179,13 @@ program define lsaplot
     }
 
     if _rc != 0 {
-        di as error _n ">>> [lsaplot] Regression Failed (RC=`_rc') <<<"
+        di as error "Regression Failed."
         restore
         exit _rc
     }
 
     * ----------------------------------------------------
-    * 6. Results Extraction
+    * 5. Extraction
     * ----------------------------------------------------
     tempfile plot_data
     tempname memhold
@@ -221,7 +207,6 @@ program define lsaplot
         else {
             if `k' < 0  local name "m`=abs(`k')'"
             else        local name "p`k'"
-            
             capture local b = _b[_ls_ev_`name']
             if _rc == 0 {
                  local se = _se[_ls_ev_`name']
@@ -242,49 +227,49 @@ program define lsaplot
     postclose `memhold'
 
     * ----------------------------------------------------
-    * 7. "San'an Style" Plotting
+    * 6. Plotting (Maximize Space)
     * ----------------------------------------------------
     if "`nograph'" == "" {
         use "`plot_data'", clear
         sort rel_time
         
-        * --- Variable Construction First (Anti-Crash Logic) ---
-        if "`title'" == "" {
-             local t_str "Event Study Estimates"
-        }
-        else {
-             local t_str "`title'"
-        }
-        local sub_str "Dependent Variable: `depvar'"
+        if "`title'" == "" local t_str "Event Study Estimates"
+        else local t_str "`title'"
+        local s_str "Dependent Variable: `depvar'"
         
-        local m_str ""
-        if "`bin'" != "" local m_str "(Binned)"
-        if "`trim'" != "" local m_str "(Trimmed)"
-        
-        local c_str "Robust"
-        if "`cluster'" != "" local c_str "Cluster: `cluster'"
-        
-        local n_str "lsaplot: `engine'`m_str' | `c_str' | `level'% CI"
+        local m_tag ""
+        if "`bin'" != "" local m_tag "(Binned)"
+        if "`trim'" != "" local m_tag "(Trimmed)"
+        local c_tag "Robust"
+        if "`cluster'" != "" local c_tag "Cluster: `cluster'"
+        local note_str "lsaplot: `engine'`m_tag' | `c_tag' | `level'% CI"
         
         di as txt "Rendering Figure..."
+
+        * === Optimization V1.7.4 ===
+        * 1. Remove Aspect Ratio (Kills giant white side-bars)
+        * 2. Set GraphRegion Margin to precise values (l=5 r=5) to maximize width
+        *    while protecting labels from being cut off.
+        * 3. RCAP remains medium/gs5/medthick (High visibility).
+        * 4. Scale range tighter (0.1 padding).
         
         twoway ///
-        (rcap lb ub rel_time, lc(gs7) lp(solid) lw(medthin) msize(small)) ///
-        (line coef rel_time, lc(black) lp(solid) lw(medthin)) ///
+        (rcap lb ub rel_time, lc(gs5) lp(solid) lw(medium) msize(medium)) ///
         (scatter coef rel_time, mc(dknavy) msymbol(O) msize(medium)), ///
+        `n_opt' /// 
         yline(0, lc(black) lp(dash) lw(vthin)) ///
         xline(`base', lc(cranberry) lp(dash) lw(medthin)) ///
         legend(off) ///
         title(`"`t_str'"', size(medium) color(black)) ///
-        subtitle(`"`sub_str'"', size(small)) ///
+        subtitle(`"`s_str'"', size(small)) ///
         xtitle("Time Relative to Event", margin(small)) ///
         ytitle("Estimate", margin(small)) ///
         xlabel(`s_win'(1)`e_win', grid glcolor(gs15) glpattern(solid) labsize(small)) ///
-        ylabel(, grid glcolor(gs15) glpattern(solid) angle(0) labsize(small)) ///
-        graphregion(color(white) margin(medsmall)) ///
+        ylabel(, grid glcolor(gs15) glpattern(solid) angle(0) labsize(small) format(%5.2f)) ///
+        graphregion(color(white) margin(l=5 r=5 t=2 b=2)) ///  <--- Precise Minimal Margins
         plotregion(lcolor(black) lw(vthin) margin(medium)) ///
         xscale(range(`scale_min' `scale_max')) ///
-        note(`"`n_str'"', size(vsmall))
+        note(`"`note_str'"', size(medium)) 
     }
 
     if "`keepdata'" != "" {
