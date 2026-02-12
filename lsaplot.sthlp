@@ -1,4 +1,6 @@
 Lsaplot：规范事件研究法绘图命令使用指南
+
+
 李林泽 山东财经大学财政税务学院23级税收学本科生
 2026/2/13
 邮箱lilinze626@gmail.com
@@ -21,9 +23,11 @@ lsaplot 是一个专为实证研究设计的 Stata 命令，旨在以最简便�
 2.1 安装方法
 
 将生成的 lsaplot.ado 文件保存至以下任意路径：
+Stata 个人 ADO 目录（如 C:\ado\plus\l\ ）。
+或者
+net install lsaplot, from(https://raw.githubusercontent.com/hurilen/lsaplot/main/) replace
 
-推荐：Stata 个人 ADO 目录（如 C:\ado\plus\l\ 或用户文件夹下）。
-临时：当前项目的工作路径（Working Directory）。
+
 
 2.2 必要依赖
 
@@ -173,4 +177,5 @@ Q4: 待定
 *+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 Happy Researching, Li San'an.
+
 
