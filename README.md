@@ -2,7 +2,9 @@
 A Stata command for plotting Event-Study results.
 
 **李林泽 山东财经大学财政税务学院23级税收学本科生**
+
 2026/2/13
+
 邮箱 lilinze626@gmail.com
 
 ---
@@ -193,7 +195,7 @@ graph export "MyFigure.pdf", replace
 
 ---
 
-**Happy Researching, Li San'an.**
+**Happy Researching.**
 
 
 
