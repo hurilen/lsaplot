@@ -1,2 +1,10 @@
 v 3
-d lsaplot
+d lsaplot: A Stata command for plotting Event-Study results
+d 
+d Author: Li San'an, School of Public Finance and Taxation, 
+d         Shandong University of Finance and Economics.
+d Support: lilinze626@gmail.com
+d
+d Distribution-Date: 20260213
+d
+p lsaplot
