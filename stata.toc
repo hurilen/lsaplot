@@ -1,10 +1,9 @@
 v 3
-d lsaplot: A Stata command for plotting Event-Study results
-d 
-d Author: Li San'an, School of Public Finance and Taxation, 
-d         Shandong University of Finance and Economics.
-d Support: lilinze626@gmail.com
+d lsaplot
+d Plot event-study/dynamic treatment effects for DID
 d
-d Distribution-Date: 20260213
+d Distribution-Date: 13 Feb 2026
+d Author: Li Linze, School of Public Finance and Taxation, Shandong University of Finance and Economics
+d Support: lilinze626@gmail.com
 d
 p lsaplot
