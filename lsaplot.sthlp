@@ -1,181 +1,157 @@
-Lsaplot：规范事件研究法绘图命令使用指南
+{smcl}
+{* 13feb2026}{...}
+{hline}
+{cmd:lsaplot} {hline 2} Plot event-study/dynamic treatment effects for difference-in-differences
+{hline}
+
+{title:Syntax}
+
+{p 8 15 2}
+{cmd:lsaplot} {depvar} [{indepvars}]
+{ifin}
+{cmd:,}
+{cmdab:Treat(}{it:varname}{cmd:)}
+{cmdab:ID(}{it:varname}{cmd:)}
+{cmdab:Time(}{it:varname}{cmd:)}
+[{cmdab:start(}{it:#}{cmd:)}
+{cmdab:end(}{it:#}{cmd:)}
+{cmdab:base(}{it:#}{cmd:)}
+{cmdab:level(}{it:#}{cmd:)}
+{cmdab:cluster(}{it:varname}{cmd:)}
+{cmdab:absorb(}{it:fe_spec}{cmd:)}
+{cmdab:bin}
+{cmdab:trim}
+{cmdab:title(}{it:string}{cmd:)}
+{cmdab:keepdata}
+{cmdab:nograph}
+{cmdab:name(}{it:name}{cmd:)} ]
 
 
-李林泽 山东财经大学财政税务学院23级税收学本科生
-2026/2/13
-邮箱lilinze626@gmail.com
+{title:Description}
+
+{pstd}
+{cmd:lsaplot} estimates and plots dynamic treatment effects (coefficients for each relative time period) from an event-study or staggered difference-in-differences (DID) model. It automatically generates publication-ready graphs with point estimates and confidence intervals.
+
+{pstd}
+The command features a "smart engine" that switches between estimation methods:
+{p_end}
+{pmore}1. For standard two-way fixed effects models, it uses the efficient {cmd:xtreg}.
+{p_end}
+{pmore}2. When high-dimensional fixed effects (via {cmd:absorb()}) or non-nested clustering is detected, it automatically switches to {cmd:reghdfe} to avoid estimation errors.
+
+{pstd}
+Two methods are provided for handling observations outside the specified event-time window ({cmd:start} to {cmd:end}):
+{p_end}
+{pmore}1. {cmd:bin} (binning/cohorting, recommended): Pools all pre-periods before {cmd:start} into the {cmd:start} period and all post-periods after {cmd:end} into the {cmd:end} period. This helps capture cumulative long-term effects.
+{p_end}
+{pmore}2. {cmd:trim} (trimming): Drops all treated observations whose event time falls outside the specified window.
+{p_end}
+{pmore}3. Default (not recommended): Neither bins nor trims. Variation from outside the window remains in the base group, which may lead to biased estimates.
 
 
-Li San'an Event Study Plot (v1.1.0)
+{title:Options}
 
-1. 命令简介
+{phang}
+{cmd:Treat(}{it:varname}{cmd:)} specifies a numeric variable indicating the first period when a unit receives treatment (e.g., the year of policy adoption). For never-treated control units, this variable should be 0 or a missing value (.). This variable is used to generate relative-time dummies. {it:Required}.
 
-lsaplot 是一个专为实证研究设计的 Stata 命令，旨在以最简便的代码，一键完成事件研究法 (Event Study) 的模型估计与可视化绘图。
+{phang}
+{cmd:ID(}{it:varname}{cmd:)} specifies the panel unit identifier (e.g., firm ID, city code). {it:Required}.
 
-核心亮点
+{phang}
+{cmd:Time(}{it:varname}{cmd:)} specifies the time identifier (e.g., year). {it:Required}.
 
-1. 绘图完整：默认输出深蓝实心点、工字型置信区间、紧凑边框、Times New Roman字体。
-2. 智能引擎：内置“智能切换”逻辑。常规情况使用轻量级的 xtreg；当涉及多维固定效应或非嵌套聚类时，自动切换至 reghdfe，避免报错。
-3. 精确归并：支持 Binning (缩尾归并) 和 Trimming (截断) 两种处理窗口外样本的模式，符合最新计量经济学文献规范。
+{phang}
+{cmd:start(}{it:#}{cmd:)} sets the first relative period to be included in the estimation and plot (e.g., -5). Defaults to the minimum computable relative period in the sample.
 
-2. 安装与环境
+{phang}
+{cmd:end(}{it:#}{cmd:)} sets the last relative period to be included (e.g., 5). Defaults to the maximum computable relative period.
 
-2.1 安装方法
+{phang}
+{cmd:base(}{it:#}{cmd:)} defines the base (omitted) relative period. The coefficient for this period is normalized to zero and excluded from the plot. Default is -1.
 
-将生成的 lsaplot.ado 文件保存至以下任意路径：
-Stata 个人 ADO 目录（如 C:\ado\plus\l\ ）。
-或者
-net install lsaplot, from(https://raw.githubusercontent.com/hurilen/lsaplot/main/) replace
+{phang}
+{cmd:level(}{it:#}{cmd:)} sets the confidence level for confidence intervals, e.g., 90, 95 (the default), or 99.
 
+{phang}
+{cmd:cluster(}{it:varname}{cmd:)} specifies the level for cluster-robust standard errors (e.g., industry, province). Any level is allowed. The default is heteroskedasticity-robust standard errors ({cmd:robust}).
 
+{phang}
+{cmd:absorb(}{it:fe_spec}{cmd:)} manually specifies high-dimensional fixed effects to absorb, using syntax like {cmd:absorb(firm_id year industry#year)}. When this option is specified, the command forces the use of {cmd:reghdfe} and strictly follows this specification; it {bf:does not} automatically include time fixed effects.
 
-2.2 必要依赖
+{phang}
+{cmd:bin} enables binning for observations outside the event window. All periods earlier than {cmd:start} are binned into the {cmd:start} period; all periods later than {cmd:end} are binned into the {cmd:end} period.
 
-由于具备智能引擎切换功能，强烈建议预先安装 reghdfe 套件：
+{phang}
+{cmd:trim} enables trimming for observations outside the event window. It drops all {bf:treated} observations whose relative time is outside the [{cmd:start}, {cmd:end}] window.
 
-ssc install reghdfe, replace
-ssc install ftools, replace
+{phang}
+{cmd:title(}{it:string}{cmd:)} adds a custom title to the generated graph.
 
-3. 计量原理 (Methodology)
+{phang}
+{cmd:keepdata} retains the intermediate dataset (containing relative time, coefficients, confidence intervals, etc.) in memory after estimation, replacing the current data.
 
-lsaplot 估计的是如下标准的事件研究方程：
+{phang}
+{cmd:nograph} runs the estimation but suppresses graph output. Useful for quickly checking regression results.
 
-Y_it = μ_i + λ_t + Σ_{k=underline{k}}^{bar{k}} β_k · D_it^k + δ X_it + ε_it
-
-其中：
-
-D_it^k 是相对时间虚拟变量（Dummy Variable），当 t - T_treat = k 时为 1。
-命令自动处理基准期（Base Period），默认将 k=-1 的系数标准化为 0。
-
-关于窗口外样本的处理（特色功能）
-
-当样本的相对时间超出设定的 [start, end] 区间时，lsaplot 提供两种处理方式：
-
-1. Binning (归并/缩尾) bin [推荐]:
-  将所有早于 start 的时期归集到 start 上；将所有晚于 end 的时期归集到 end 上。
-  这有助于捕捉长期趋势的累积效应（类似 Sun & Abraham, 2021 的建议）。
-2. Trimming (截断) trim:
-  直接删除窗口区间之外的处理组样本。
-  这是一种更纯粹的局部窗口估计。
-3. 默认 (Default):
-  既不删除也不归并。窗口外的 dummy 此时未生成，这部分样本的变异会进入基准组（Base），这是错误操作，因此强烈建议选择归并或截断。
-*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-4. 语法格式
-
-lsaplot depvar [indepvars] [if] [in], ///
-        Treat(varname) ID(varname) Time(varname) ///
-        [Options]
-
-depvar: 被解释变量。
-[indepvars]: （可选）控制变量列表。
-
-*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-必填核心选项
-
-选项  描述   注意事项
-Treat(var)  表示处理组首次受政策冲击的gvar变量。控制组该变量需为 0 或 .。不要填0/1虚拟变量。
-ID(var) 个体ID  面板个体的唯一标识（如股票代码、城市代码）。
-Time(var)  时间变量  面板的时间标识（如年份）。
-
-*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-选填参数
-
-选项  缩写   默认值 描述
-start(#) -   自动  绘图窗口起始期（如 -5）。不填则取最小值。
-end(#)  -   自动  绘图窗口结束期（如 5）。不填则取最大值。
-base(#) -   -1  基准期，该期系数会被 omission 并不在图上显示。
-level(#) le 95  置信水平（90, 95, 99）。
-cluster(var) cl robust  标准误聚类层级。支持任意层级聚类。
-absorb(str) a   自动  自定义高维固定效应。一旦指定，将强制使用 reghdfe 并不再默认控制年份。
-bin -   否  归并模式：累积窗口外的样本效应。
-trim    -   否  截断模式：删除窗口外的处理组样本。
-title(str)  -   -   图片标题。支持中文。
-keepdata    -   -   保留绘图用的数据（会替换当前内存数据）。
-nograph -   -   仅跑回归，不画图。
-name(#) -   -   命名图表名字，便于后续使用graph combine合并图表。
-
-*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-5. 操作实战案例 (Cookbook)
-
-场景一：快速预览（Default Mode）
-
-只想看一眼 Y 和政策的基本动态关系，不需要控制变量。
-
-lsaplot lnemp, treat(gvar) id(stkcd) time(year)
-
-结果：自动识别全样本区间，使用稳健标准误，个体+年份双固定效应。
-
-场景二：标准 DID 论文图
-加入控制变量，按行业聚类标准误，设定 [-5, 5] 窗口，并采用 Binning (归并) 模式防止偏差。
-
-lsaplot lnemp Size Lev ROA, ///    (因变量 + 控制变量)
-    treat(gvar) id(stkcd) time(year) ///
-    start(-5) end(5) base(-1) ///  (设定窗口和基准)
-    cl(industry) bin ///           (行业聚类 + 归并模式)
-    title("The Dynamic Effect on Employment")
-
-智能切换：程序会自动检测到 industry != stkcd，后台静默切换至 reghdfe 引擎以正确处理非嵌套聚类。
-
-场景三：高维固定效应（Power Mode）
-
-需要控制 “行业-年份” 和 “省份-年份” 联合固定效应。
-
-lsaplot lnemp Controls, ///
-    treat(gvar) id(stkcd) time(year) ///
-    a(stkcd industry#year province#year) ///  
-    cl(stkcd) trim                           // (使用截断模式)
-
-逻辑：使用了 a() 选项，命令进入 Power Mode，完全遵从你的吸收设定，不再自动加 i.year。
-
-场景四：合并图表
-lsaplot lnemp industry_num, treat(action) id(stkcd) time(year) cl(id) start(-3) bin  ///
-    title("Panel A: Effect on Employment") ///
-    name(A1, replace) 
-
-lsaplot SCF industry_num, treat(action) id(stkcd) time(year) cl(id) start(-3) bin  ///
-    title("Panel B: Effect on Financing") ///
-    name(A2, replace)
-
-graph combine A1 A2, row(1) xsize(11) ysize(4.5) ///
-    graphregion(color(white)) ///
-    title("Mechanisms Analysis", size(medium))
-*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-6. 常见问题 (FAQ)
-
-Q1: 如何生成gvar变量？
-
-答：以多期DID为例，假设两批冲击时间分别是2018年和2020年。
-gen action = .  // 初始化
-* 第一批处理组
-replace action = 2018 if (城市 == "壶关县") & year >= 2018
-* 第二批处理组
-replace action = 2020 if (城市 == "崇礼县") & year >= 2020
-gen did = (year >= action)
-bysort id: egen gvar = min(action)
-label variable gvar "首次政策冲击年份（个体层面）"
-
-如果是标准DID，则gvar变量生产方式为：
-gen gvar = 冲击时间 if treat == 1
-
-Q2: 为什么回归结果和 xtreg 手跑的不一样？
-
-答：通常不会如此，如不同，请检查窗口外的样本处理。手动 xtreg 通常将窗口外的 dummy 归入基准组，这是错误操作，属于没有正确生成dummy变量。
-如果你在 lsaplot 中用了 trim，样本量变少了，系数自然不同；如果你用了 bin，系数组合方式也不同。这是方法论选择的问题。
-
-Q3: 如何导出图片？
-
-答：命令运行完后图片会显示在窗口中。直接使用 Stata 标准命令：
-graph export "MyFigure.png", width(2000) replace
-graph export "MyFigure.pdf", replace
-也可以使用name给图片命名，详见场景四。
-
-Q4: 待定
-
-答：略
-
-*+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-Happy Researching, Li San'an.
+{phang}
+{cmd:name(}{it:name}{cmd:)} assigns a name to the generated graph for later use with commands like {cmd:graph combine}.
 
 
+{title:Examples}
+
+{pstd}Basic example: Quick preview of dynamic effects{p_end}
+{phang2}{cmd:. sysuse nlswork, clear}{p_end}
+{phang2}{cmd:. // Generate gvar (first treatment year)}{p_end}
+{phang2}{cmd:. bys idcode: egen gvar = min(year) if union == 1}{p_end}
+{phang2}{cmd:. replace gvar = 0 if mi(gvar)}{p_end}
+{phang2}{cmd:. lsaplot ln_wage, treat(gvar) id(idcode) time(year)}{p_end}
+
+{pstd}Standard DID plot: Set window, cluster, and use binning{p_end}
+{phang2}{cmd:. lsaplot ln_wage tenure hours, treat(gvar) id(idcode) time(year) start(-5) end(5) cl(idcode) bin title("Dynamic Effects on Wage")}{p_end}
+
+{pstd}High-dimensional fixed effects with trimming{p_end}
+{phang2}{cmd:. lsaplot ln_wage, treat(gvar) id(idcode) time(year) absorb(idcode occ_code#year) cl(occ_code) trim}{p_end}
+
+{pstd}Create and combine multiple graphs{p_end}
+{phang2}{cmd:. lsaplot ln_wage, treat(gvar) id(idcode) time(year) start(-3) bin name(fig1, replace)}{p_end}
+{phang2}{cmd:. lsaplot hours, treat(gvar) id(idcode) time(year) start(-3) bin name(fig2, replace)}{p_end}
+{phang2}{cmd:. graph combine fig1 fig2, row(1)}{p_end}
+
+
+{title:Stored results}
+
+{pstd}
+{cmd:lsaplot} stores standard estimation results in {cmd:e()}, the contents of which depend on the underlying engine used ({cmd:xtreg} or {cmd:reghdfe}).
+{p_end}
+{pstd}
+If the {cmd:keepdata} option is specified, the resulting dataset in memory will contain the following variables used for plotting:
+{it:reltime}, {it:beta}, {it:cil}, {it:ciu} (representing relative time, coefficient estimate, lower and upper confidence interval bounds, respectively).
+
+
+{title:Installation and requirements}
+
+{pstd}
+{cmd:lsaplot} is self-contained but relies on external packages for advanced features. It is recommended to install:
+{p_end}
+{phang2}{cmd:. ssc install reghdfe, replace}{p_end}
+{phang2}{cmd:. ssc install ftools, replace}{p_end}
+{pstd}
+The latest version can also be installed from GitHub:
+{p_end}
+{phang2}{cmd:. net install lsaplot, from(https://raw.githubusercontent.com/hurilen/lsaplot/main/) replace}{p_end}
+
+
+{title:Author}
+
+Linze Li
+School of Public Finance and Taxation, Shandong University of Finance and Economics
+Email: lilinze626@gmail.com
+
+
+{title:References}
+
+{pstd}
+Sun, L., and S. Abraham. 2021. Estimating Dynamic Treatment Effects in Event Studies with Heterogeneous Treatment Effects. {it:Journal of Econometrics}.{p_end}
+{pstd}
+For methodological discussions on event-study and staggered DID designs, please refer to the recent econometrics literature.
+{p_end}
