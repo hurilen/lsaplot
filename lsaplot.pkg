@@ -4,6 +4,10 @@ d distribution-date: 2025-12-23
 d author: lisanan
 d support: lilinze626@gmail.com
 d url: https://github.com/hurilen/lsaplot
-
+d
+d This package provides a streamlined tool for DID parallel trend analysis,
+d supporting high-dimensional fixed effects and binning/trimming methods.
+d Requires: reghdfe, ftools (for high-dimensional FE mode).
+d
 f lsaplot.ado
 f lsaplot.sthlp
