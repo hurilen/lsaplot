@@ -1,6 +1,6 @@
-*! version 1.7.4  lsaplot: Full-Width (No Aspect), Compact Scale, Visible CI
-*! Author: Li San'an
-*! Date: 2026-2-13
+*! Copyright 2026 Li Linze
+*! Version 1.7.4
+*! Requires Stata 14.0 or above
 
 capture program drop lsaplot
 program define lsaplot
