@@ -1,13 +1,16 @@
 v 3
-d lsaplot: a stata command for plotting event study results
-d distribution-date: 2025-12-23
-d author: lisanan
+d lsaplot: Plot event-study/dynamic treatment effects for difference-in-differences
+d distribution-date: 13 Feb 2026
+d author: Li Linze
 d support: lilinze626@gmail.com
 d url: https://github.com/hurilen/lsaplot
 d
-d This package provides a streamlined tool for DID parallel trend analysis,
+d This package provides a streamlined tool for DID dynamic effect analysis,
 d supporting high-dimensional fixed effects and binning/trimming methods.
-d Requires: reghdfe, ftools (for high-dimensional FE mode).
+d
+d IMPORTANT: For full functionality, it is recommended to also install:
+d    - reghdfe (SSC)
+d    - ftools (SSC)
 d
 f lsaplot.ado
 f lsaplot.sthlp
